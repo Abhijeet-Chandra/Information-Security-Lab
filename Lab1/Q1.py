@@ -1,6 +1,7 @@
 plaintext = "I am learning information security"
 plaintext = plaintext.lower().replace(" ", "")
 
+#hmmmmmmmmmmmmm
 #helper functions:
 def findInv(key):
     for i in range(26):
