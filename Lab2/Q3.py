@@ -1,66 +1,62 @@
-from Crypto.Cipher import DES, AES
-from Crypto.Util.Padding import pad, unpad
 import time
 
-message = "Performance Testing of Encryption Algorithm"
-message = message.encode()
+from Crypto.Cipher import AES,DES
+from Crypto.Util.Padding import pad,unpad
 
-des_key = b"A1B2C3D4"
-aes_key = b"0123456789ABCDEF0123456789ABCDEF"
+N = 10000
 
-#DES---------------------------------------:
+message = b"Performance Testing of Encryption Algorithms"
 
-des_padded = pad(message, DES.block_size)
-des = DES.new(des_key, DES.MODE_ECB)
+des_key = b"12345678"
+aes_key = b"12345678901234567890123456789012"
 
-#encryption:
+# ------------------- DES -------------------
 
-start = time.perf_counter_ns()
-des_ciphertext = des.encrypt(des_padded)
-end = time.perf_counter_ns()
+start = time.perf_counter()
 
-des_encryption_time = end - start
+for _ in range(N):
+    des = DES.new(des_key,DES.MODE_ECB)
+    des_ciphertext = des.encrypt(pad(message,8))
 
-#decryption:
+des_encrypt_time = time.perf_counter() - start
 
-start = time.perf_counter_ns()
-des_plaintext = unpad(des.decrypt(des_ciphertext),DES.block_size)
-end = time.perf_counter_ns()
 
-des_decryption_time = end - start
+start = time.perf_counter()
 
-#AES---------------------------------------:
+for _ in range(N):
+    des = DES.new(des_key,DES.MODE_ECB)
+    des_plaintext = unpad(des.decrypt(des_ciphertext),8)
 
-aes = AES.new(aes_key, AES.MODE_ECB)
-aes_message = pad(message, AES.block_size)
+des_decrypt_time = time.perf_counter() - start
 
-#encryption:
 
-start = time.perf_counter_ns()
-aes_ciphertext = aes.encrypt(aes_message)
-end = time.perf_counter_ns()
+# ------------------- AES -------------------
 
-aes_encryption_time = end - start
+start = time.perf_counter()
 
-#decryption:
+for _ in range(N):
+    aes = AES.new(aes_key,AES.MODE_ECB)
+    aes_ciphertext = aes.encrypt(pad(message,16))
 
-start = time.perf_counter_ns()
-aes_plaintext = unpad(aes.decrypt(aes_ciphertext),AES.block_size)
-end = time.perf_counter_ns()
-aes_decryption_time = end - start
+aes_encrypt_time = time.perf_counter() - start
 
- #result:
 
-print("DES")
-print("Ciphertext:", des_ciphertext.hex())
-print("Decrypted:", des_plaintext.decode())
-print("Encryption time:", des_encryption_time, "ns")
-print("Decryption time:", des_decryption_time, "ns")
+start = time.perf_counter()
 
-print()
+for _ in range(N):
+    aes = AES.new(aes_key,AES.MODE_ECB)
+    aes_plaintext = unpad(aes.decrypt(aes_ciphertext),16)
 
-print("AES-256")
-print("Ciphertext:", aes_ciphertext.hex())
-print("Decrypted:", aes_plaintext.decode())
-print("Encryption time:", aes_encryption_time, "ns")
-print("Decryption time:", aes_decryption_time, "ns")
+aes_decrypt_time = time.perf_counter() - start
+
+
+# ---------------- Results ----------------
+
+print("DES Encryption Time :", des_encrypt_time)
+print("DES Decryption Time :", des_decrypt_time)
+
+print("AES-256 Encryption Time :", aes_encrypt_time)
+print("AES-256 Decryption Time :", aes_decrypt_time)
+
+print("\nDES Decrypted :", des_plaintext.decode())
+print("AES Decrypted :", aes_plaintext.decode())
