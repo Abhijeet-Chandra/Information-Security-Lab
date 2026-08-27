@@ -1,17 +1,18 @@
 from Crypto.Cipher import AES
+from Crypto.Util.Padding import pad,unpad
 
-message = "Sensitive Information"
 key = b"0123456789ABCDEF0123456789ABCDEF"
+message = b"Sensitive Information"
 
-while len(message.encode()) % 16 != 0:
-    message += " "
-
-cipher = AES.new(key, AES.MODE_ECB)
-
-ciphertext = cipher.encrypt(message.encode())
+#encrypt
+cipher = AES.new(key,AES.MODE_ECB)
+ciphertext = cipher.encrypt(pad(message,16))
 
 print("Ciphertext: ", ciphertext.hex())
 
-decrypted = cipher.decrypt(ciphertext)
+#decrypt:
 
-print("Decrypted: ", decrypted.decode().strip())
+cipher = AES.new(key,AES.MODE_ECB)
+plaintext = unpad(cipher.decrypt(ciphertext),16)
+
+print("Decrypted: ", plaintext.decode())
