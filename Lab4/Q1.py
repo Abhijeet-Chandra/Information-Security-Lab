@@ -1,33 +1,32 @@
-import os
 import secrets
 
-from cryptography.hazmat.primitives import hashes, serialization
+
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 
-# =========================================================
-# PUBLIC DIFFIE-HELLMAN PARAMETERS
-# =========================================================
 
-P = 467
-G = 2
+#===============================================
+#DIFFIE-HELLMAN PARAMETERS
+#===============================================
 
+p = 467
+g = 2
 
-# =========================================================
-# SUBSYSTEM
-# =========================================================
+#===============================================
+#SYSTEM
+#===============================================
 
-class Subsystem:
+class System:
 
-    def __init__(self, name):
-
+    def __init__(self,name):
         self.name = name
         self.active = True
 
-        # ---------------------------------------------
-        # RSA keys
-        # ---------------------------------------------
+        #----------------
+        #RSA Key pair
+        # ----------------
 
         self.rsa_private = rsa.generate_private_key(
             public_exponent=65537,
@@ -36,140 +35,80 @@ class Subsystem:
 
         self.rsa_public = self.rsa_private.public_key()
 
-        # ---------------------------------------------
-        # Diffie-Hellman keys
-        # ---------------------------------------------
+        # ----------------
+        #DH key pair
+        # ----------------
 
-        self.dh_private = secrets.randbelow(P - 2) + 1
+        self.dh_private = secrets.randbelow(p-2) + 1
 
         self.dh_public = pow(
-            G,
+            g,
             self.dh_private,
-            P
+            p
         )
 
-
-# =========================================================
-# KEY MANAGEMENT
-# =========================================================
+    # ===============================================
+    #KEY MANAGEMENT
+    # ===============================================
 
 class KeyManager:
 
     def __init__(self):
+        self.systems = {}
 
-        self.subsystems = {}
+    def add_system(self, system):
+        self.systems[system.name] = system
+        print(system.name, "added.")
 
+    def get_public_keys(self, name):
+        system = self.systems[name]
 
-    # -----------------------------------------------------
-    # Register a new subsystem
-    # -----------------------------------------------------
+        if not system.active:
+            print("System is revoked.")
+            return None
 
-    def register(self, subsystem):
-
-        self.subsystems[subsystem.name] = subsystem
-
-        print(
-            subsystem.name,
-            "registered successfully."
-        )
-
-
-    # -----------------------------------------------------
-    # Revoke a subsystem
-    # -----------------------------------------------------
+        return system.rsa_public, system.dh_public
 
     def revoke(self, name):
-
-        if name in self.subsystems:
-
-            self.subsystems[name].active = False
-
-            print(
-                name,
-                "has been revoked."
-            )
-
-
-    # -----------------------------------------------------
-    # Check whether subsystem is active
-    # -----------------------------------------------------
-
-    def is_active(self, name):
-
-        return (
-            name in self.subsystems
-            and self.subsystems[name].active
-        )
-
-
-    # -----------------------------------------------------
-    # Display registered subsystems
-    # -----------------------------------------------------
-
-    def display(self):
-
-        print("\nRegistered Subsystems:")
-
-        for name, system in self.subsystems.items():
-
-            status = "Active" if system.active else "Revoked"
-
-            print(
-                name,
-                "->",
-                status
-            )
-
+        self.systems[name].active = False
+        print(name, "has been revoked.")
 
 # =========================================================
-# DIFFIE-HELLMAN SHARED SECRET
+# DH SHARED SECRET
 # =========================================================
 
-def generate_shared_secret(
-        sender,
-        receiver):
+def create_shared_secret(sender, receiver):
 
-    # Sender calculates:
-    # K = receiver_public ^ sender_private mod P
-
+    #sender calculates the shared secret
     sender_secret = pow(
         receiver.dh_public,
         sender.dh_private,
-        P
+        p
     )
 
-    # Receiver calculates:
-    # K = sender_public ^ receiver_private mod P
-
+    #receiver calculates the shared secret
     receiver_secret = pow(
         sender.dh_public,
         receiver.dh_private,
-        P
+        p
     )
 
     return sender_secret, receiver_secret
 
-
 # =========================================================
-# DERIVE AES KEY FROM DH SECRET
+# CONVERT DH SECRET INTO AES KEY
 # =========================================================
 
-def derive_aes_key(shared_secret):
+def make_aes_key(shared_secret):
 
-    # Convert integer shared secret into bytes
+    digest = hashes.Hash(hashes.SHA256())
 
-    secret_bytes = shared_secret.to_bytes(
-        (shared_secret.bit_length() + 7) // 8,
-        byteorder="big"
+    digest.update(
+        shared_secret.to_bytes(
+            (shared_secret.bit_length() + 7) // 8,
+            "big"
+        )
     )
-
-    # SHA-256 gives us a 256-bit AES key
-
-    digest = hashes.Hash(
-        hashes.SHA256()
-    )
-
-    digest.update(secret_bytes)
 
     return digest.finalize()
 
@@ -178,49 +117,33 @@ def derive_aes_key(shared_secret):
 # RSA DIGITAL SIGNATURE
 # =========================================================
 
-def sign_message(sender, message):
-
-    signature = sender.rsa_private.sign(
-        message,
+def sign_document(system, document):
+    signature = system.rsa_private.sign(
+        document.encode(),
         padding.PSS(
-            mgf=padding.MGF1(
-                hashes.SHA256()
-            ),
+            mgf=padding.MGF1(hashes.SHA256()),
             salt_length=padding.PSS.MAX_LENGTH
         ),
         hashes.SHA256()
     )
-
     return signature
 
 
-# =========================================================
-# VERIFY RSA DIGITAL SIGNATURE
-# =========================================================
-
-def verify_signature(
-        sender,
-        message,
-        signature):
+def verify_signature(system, document, signature):
 
     try:
-
-        sender.rsa_public.verify(
+        system.rsa_public.verify(
             signature,
-            message,
+            document.encode(),
             padding.PSS(
-                mgf=padding.MGF1(
-                    hashes.SHA256()
-                ),
+                mgf=padding.MGF1(hashes.SHA256()),
                 salt_length=padding.PSS.MAX_LENGTH
+
             ),
             hashes.SHA256()
         )
-
         return True
-
     except Exception:
-
         return False
 
 
@@ -228,29 +151,23 @@ def verify_signature(
 # ENCRYPT DOCUMENT
 # =========================================================
 
-def encrypt_document(message, aes_key):
-
+def encrypt_document(document, aes_key):
     aes = AESGCM(aes_key)
 
-    nonce = os.urandom(12)
+    nonce = secrets.token_bytes(12)
 
     ciphertext = aes.encrypt(
         nonce,
-        message.encode(),
+        document.encode(),
         None
     )
-
     return nonce, ciphertext
-
 
 # =========================================================
 # DECRYPT DOCUMENT
 # =========================================================
 
-def decrypt_document(
-        nonce,
-        ciphertext,
-        aes_key):
+def decrypt_document(nonce, ciphertext, aes_key):
 
     aes = AESGCM(aes_key)
 
@@ -262,116 +179,74 @@ def decrypt_document(
 
     return plaintext.decode()
 
-
 # =========================================================
-# SECURE DOCUMENT TRANSFER
+# SECURE COMMUNICATION
 # =========================================================
 
-def secure_transfer(
-        sender,
-        receiver,
-        document):
+def send_document(sender, receiver, document):
+    print("\n" + "=" * 50)
+    print(sender.name, "->", receiver.name)
+    print("=" * 50)
 
-    print("\n" + "=" * 60)
+    if not sender.active or not receiver.active:
+        print("Communication failed: system is revoked.")
 
-    print(
-        "SECURE TRANSFER:",
-        sender.name,
-        "->",
-        receiver.name
-    )
-
-    print("=" * 60)
-
-
-    # -----------------------------------------------------
-    # Check whether both systems are active
-    # -----------------------------------------------------
-
-    if not sender.active:
-
-        print("Transfer failed: sender is revoked.")
         return
 
-    if not receiver.active:
-
-        print("Transfer failed: receiver is revoked.")
-        return
-
-
     # -----------------------------------------------------
-    # DIFFIE-HELLMAN
+    # 1. DIFFIE-HELLMAN
     # -----------------------------------------------------
 
-    sender_secret, receiver_secret = \
-        generate_shared_secret(
-            sender,
-            receiver
-        )
-
-    print(
-        "\nDH shared secret same:",
-        sender_secret == receiver_secret
-    )
-
-
-    # -----------------------------------------------------
-    # AES KEY
-    # -----------------------------------------------------
-
-    aes_key = derive_aes_key(
-        sender_secret
-    )
-
-    receiver_aes_key = derive_aes_key(
-        receiver_secret
-    )
-
-    print(
-        "AES key same:",
-        aes_key == receiver_aes_key
-    )
-
-
-    # -----------------------------------------------------
-    # RSA DIGITAL SIGNATURE
-    # -----------------------------------------------------
-
-    signature = sign_message(
+    sender_secret, receiver_secret = create_shared_secret(
         sender,
-        document.encode()
+        receiver
     )
 
     print(
-        "RSA signature verified:",
+        "shared secret same:",
+        sender_secret==receiver_secret
+    )
+
+    # -----------------------------------------------------
+    # 2. CREATE AES KEY
+    # -----------------------------------------------------
+
+    sender_aes_key = make_aes_key(sender_secret)
+    receiver_aes_key = make_aes_key(receiver_secret)
+
+    # -----------------------------------------------------
+    # 3. RSA DIGITAL SIGNATURE
+    # -----------------------------------------------------
+
+    signature = sign_document(
+        sender,
+        document
+    )
+
+    print(
+        "RSA signature valid:",
         verify_signature(
             sender,
-            document.encode(),
+            document,
             signature
         )
     )
 
-
     # -----------------------------------------------------
-    # ENCRYPT DOCUMENT
+    # 4. ENCRYPT DOCUMENT USING AES
     # -----------------------------------------------------
 
     nonce, ciphertext = encrypt_document(
         document,
-        aes_key
+        sender_aes_key
     )
 
     print(
-        "\nEncrypted document:"
-    )
-
-    print(
+        "Encrypted document:",
         ciphertext.hex()
     )
-
-
     # -----------------------------------------------------
-    # DECRYPT DOCUMENT
+    # 5. RECEIVER DECRYPTS
     # -----------------------------------------------------
 
     decrypted = decrypt_document(
@@ -381,121 +256,101 @@ def secure_transfer(
     )
 
     print(
-        "\nDecrypted document:"
-    )
-
-    print(
+        "Decrypted document: ",
         decrypted
     )
 
-
-    # -----------------------------------------------------
-    # FINAL VERIFICATION
-    # -----------------------------------------------------
-
     print(
-        "\nDocument verification:",
+        "Verification:",
         decrypted == document
     )
 
-
-# =========================================================
-# MAIN
-# =========================================================
-
 def main():
 
-    print("=" * 60)
-    print("SECURECORP SECURE COMMUNICATION SYSTEM")
-    print("=" * 60)
-
+    print("=" * 50)
+    print("SECURE SECURE COMMUNICATION SYSTEM")
+    print("=" *50)
 
     # -----------------------------------------------------
-    # Create key manager
-    # -----------------------------------------------------
+    # KEY MANAGEMENT SERVICE
+    # ----------------------------------------------------
 
     key_manager = KeyManager()
 
-
-    # -----------------------------------------------------
-    # Create SecureCorp subsystems
-    # -----------------------------------------------------
-
-    finance = Subsystem("Finance System")
-    hr = Subsystem("HR System")
-    supply_chain = Subsystem("Supply Chain System")
-
-
-    # -----------------------------------------------------
-    # Register systems
+    #-----------------------------------------------------
+    # CREATE SYSTEMS
     # -----------------------------------------------------
 
-    key_manager.register(finance)
-    key_manager.register(hr)
-    key_manager.register(supply_chain)
-
-
-    # -----------------------------------------------------
-    # Display systems
-    # -----------------------------------------------------
-
-    key_manager.display()
-
+    finance = System("Finance System")
+    hr = System("HR System")
+    supply = System("Supply Chain System")
 
     # -----------------------------------------------------
-    # Finance -> HR
+    #REGISTER SYSTEMS
     # -----------------------------------------------------
 
-    secure_transfer(
+    key_manager.add_system(finance)
+    key_manager.add_system(hr)
+    key_manager.add_system(supply)
+
+    # -----------------------------------------------------
+    #key distribution
+    # -----------------------------------------------------
+
+    print("\nPublic keys of HR:")
+    rsa_public, dh_public = key_manager.get_public_keys("HR System")
+
+    print("RSA public key received.",rsa_public)
+    print("DH public key:",dh_public)
+
+    # -----------------------------------------------------
+    #SECURE DOCUMENT TRANSFER
+    # -----------------------------------------------------
+
+    send_document(
         finance,
         hr,
-        "Confidential Employee Contract"
+        "Confidential Financial Report"
     )
 
-
-    # -----------------------------------------------------
-    # Finance -> Supply Chain
-    # -----------------------------------------------------
-
-    secure_transfer(
-        finance,
-        supply_chain,
-        "Procurement Order"
+    send_document(
+        hr,
+        supply,
+        "Employee Contract"
     )
 
-
     # -----------------------------------------------------
-    # Demonstrate scalability
+    # KEY REVOCATION
     # -----------------------------------------------------
 
-    marketing = Subsystem("Marketing System")
-
-    key_manager.register(marketing)
-
-    key_manager.display()
-
-
-    # -----------------------------------------------------
-    # Demonstrate key revocation
-    # -----------------------------------------------------
+    print("\nRevoking HR System...")
 
     key_manager.revoke(
         "HR System"
     )
 
-    key_manager.display()
-
-
     # -----------------------------------------------------
-    # Try communication with revoked system
+    # TRY COMMUNICATION AFTER REVOCATION
     # -----------------------------------------------------
 
-    secure_transfer(
+    send_document(
         finance,
         hr,
         "Financial Report"
     )
 
+    # -----------------------------------------------------
+    # SCALABILITY
+    # -----------------------------------------------------
 
-if __name__ == "__main__":
-    main()
+    print("\nAdding new subsystem...")
+
+    marketing = System(
+        "Marketing System"
+    )
+
+    key_manager.add_system(
+        marketing
+    )
+
+main()
