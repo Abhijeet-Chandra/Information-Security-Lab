@@ -1,5 +1,30 @@
 import random
 
+# # Publicly known:
+#     p, g
+#
+# # Key generation:
+#     Private key = x
+#     Public key component = h = g^x mod p
+#
+# # Therefore:
+#     Public key  = (p, g, h)
+#     Private key = x
+#
+# # Encryption:
+#     1. Choose a random value k
+#     2. Calculate c1 = g^k mod p
+#     3. Calculate c2 = m × h^k mod p
+#     4. Ciphertext = (c1, c2)
+#
+# # Decryption:
+#     5. Calculate s = c1^x mod p
+#     6. Calculate s^(-1) mod p
+#     7. Calculate m = c2 × s^(-1) mod p
+#     8. Convert m back to the original character/message
+#
+# # Result:
+#     Decrypted message = Original message
 
 #elgamal encryption:
 
