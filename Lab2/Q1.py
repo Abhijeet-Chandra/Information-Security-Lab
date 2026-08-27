@@ -1,17 +1,18 @@
 from Crypto.Cipher import DES
+from Crypto.Util.Padding import pad,unpad
 
-message = "Confidential Data"
 key = b"A1B2C3D4"
+message = b"Confidential Data"
 
-while len(message.encode()) % 8 != 0:
-    message += " "
-
-cipher = DES.new(key, DES.MODE_ECB)
-ciphertext = cipher.encrypt(message.encode())
-
-print("Ciphertext: ", ciphertext.hex())
+#Encryption:
 
 cipher = DES.new(key, DES.MODE_ECB)
-decrypted = cipher.decrypt(ciphertext)
+ciphertext = cipher.encrypt(pad(message,8))
 
-print("Decrypted: ", decrypted.decode().strip())
+print("Ciphertext: ",ciphertext.hex())
+
+cipher = DES.new(key, DES.MODE_ECB)
+plaintext = unpad(cipher.decrypt(ciphertext),8)
+
+
+print("Decrypted: ", plaintext.decode())
